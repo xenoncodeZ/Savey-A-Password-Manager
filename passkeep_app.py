@@ -22,6 +22,7 @@ class PasswordManager:
         self.decryption_key = None
         self.content = ""
         self.records_count = 0
+        self.decrypted = False
 
     def pad_db_key(self, password):
         return password + ("0" * (16 - (len(password) % 16))) if len(password) % 16 != 0 else password
@@ -33,9 +34,14 @@ class PasswordManager:
         print("Created new DB with default key 'password123'")
 
     def decrypt_db(self, key):
+        # Always read the latest ciphertext and key hash from file
+        with open(self.path_to_database, "rb") as db_handle:
+            self.db_key_hash = db_handle.read(64).decode()
+            self.ciphertext = db_handle.read()
         self.decryption_key = self.pad_db_key(key)
         password_hash = hashlib.sha256(self.decryption_key.encode()).hexdigest()
         if password_hash != self.db_key_hash:
+            self.decrypted = False
             return "❌ Invalid decryption key."
         if self.ciphertext.strip():
             aes_instance = AES.new(self.decryption_key.encode(), AES.MODE_CBC, self.decryption_key[:16].encode())
@@ -44,6 +50,7 @@ class PasswordManager:
         else:
             self.content = ""
             self.records_count = 0
+        self.decrypted = True
         return "✅ Decryption successful."
 
     def encrypt_and_save(self):
@@ -55,6 +62,8 @@ class PasswordManager:
             db_handle.write(self.db_key_hash.encode() + ciphertext)
 
     def show_credentials(self):
+        if not self.decrypted:
+            return "❌ Please decrypt the database first."
         if self.records_count == 0 or not self.content.strip():
             return "No records."
         table = self.content.split("|")
@@ -66,6 +75,8 @@ class PasswordManager:
         return output
 
     def add_credentials(self, username, password, platform):
+        if not self.decrypted:
+            return "❌ Please decrypt the database first."
         new_id = 1 if self.records_count == 0 or not self.content.strip() else int(self.content.split("|")[-1].split("-")[0]) + 1
         new_record = f"{new_id}-{username}-{password}-{platform}"
         self.content = new_record if self.records_count == 0 or not self.content.strip() else self.content + "|" + new_record
@@ -74,6 +85,8 @@ class PasswordManager:
         return "✅ Record added."
 
     def edit_credentials(self, record_id, new_username, new_password):
+        if not self.decrypted:
+            return "❌ Please decrypt the database first."
         if self.records_count == 0 or not self.content.strip():
             return "❌ No records."
         records = self.content.split("|")
@@ -95,6 +108,8 @@ class PasswordManager:
         return "✅ Record updated."
 
     def delete_credentials(self, record_id):
+        if not self.decrypted:
+            return "❌ Please decrypt the database first."
         if self.records_count == 0 or not self.content.strip():
             return "❌ No records."
         records = self.content.split("|")
@@ -114,6 +129,8 @@ class PasswordManager:
         return "✅ Record deleted."
 
     def change_db_password(self, current_pass, new_pass):
+        if not self.decrypted:
+            return "❌ Please decrypt the database first."
         current_hash = hashlib.sha256(self.pad_db_key(current_pass).encode()).hexdigest()
         if current_hash != self.db_key_hash:
             return "❌ Current key incorrect."
@@ -127,20 +144,28 @@ class PasswordManager:
         return "✅ Key updated."
 
     def generate_password(self):
+        if not self.decrypted:
+            return "❌ Please decrypt the database first."
         return "".join(random.choices(string.ascii_letters + string.digits + string.punctuation, k=16))
 
     def backup_database(self):
+        if not self.decrypted:
+            return "❌ Please decrypt the database first."
         backup_path = "./passwords.db.bak"
         shutil.copyfile(self.path_to_database, backup_path)
         return f"✅ Backup created: {backup_path}"
 
     def erase_database(self):
+        if not self.decrypted:
+            return "❌ Please decrypt the database first."
         self.content = ""
         self.records_count = 0
         self.encrypt_and_save()
         return "✅ Database erased."
 
     def send_password_to_email(self, record_id, to_email, from_email, from_pass):
+        if not self.decrypted:
+            return "❌ Please decrypt the database first."
         if self.records_count == 0 or not self.content.strip():
             return "❌ No records."
         record = None
@@ -172,7 +197,7 @@ pm = PasswordManager()
 # Gradio functions
 def decrypt_ui(key):
     status = pm.decrypt_db(key)
-    creds = pm.show_credentials()
+    creds = pm.show_credentials() if pm.decrypted else ""
     return status, creds
 
 def add_ui(username, password, platform):
