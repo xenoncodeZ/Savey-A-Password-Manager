@@ -49,6 +49,8 @@ python passkeep_app.py
 After running, Gradio will automatically open a local link (usually http://127.0.0.1:7860/).
 You’ll see Savey's cute and simple interface to start managing your passwords!
 
+Important ; The Default decryption key is 'password123' you can change it once you get in the web app.
+
 🏗️ File Structure
 pgsql
 Copy
